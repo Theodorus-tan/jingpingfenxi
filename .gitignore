@@ -1,0 +1,35 @@
+# Python
+python-agent/venv/
+python-agent/.env
+python-agent/__pycache__/
+python-agent/**/__pycache__/
+python-agent/.pytest_cache/
+python-agent/.coverage
+python-agent/**/*.pyc
+python-agent/**/*.pyo
+
+# Node
+competitor-frontend/arco-design-pro-vite/node_modules/
+competitor-frontend/arco-design-pro-vite/dist/
+competitor-frontend/arco-design-pro-vite/.env.development.local
+competitor-frontend/arco-design-pro-vite/.env.production.local
+
+# Go binaries
+competitor-backend/main_app
+competitor-backend/main
+**/*.exe
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Test
+.coverage
+htmlcov/
+.pytest_cache/
