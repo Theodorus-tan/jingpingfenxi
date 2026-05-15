@@ -1,5 +1,5 @@
-<script lang="tsx">
-  import { defineComponent, ref, h, compile, computed } from 'vue';
+<script lang="ts">
+  import { defineComponent, ref, h, compile, computed, resolveComponent } from 'vue';
   import { useI18n } from 'vue-i18n';
   import { useRoute, useRouter, RouteRecordRaw } from 'vue-router';
   import type { RouteMeta } from 'vue-router';
@@ -89,35 +89,40 @@
           appStore.updateSettings({ menuCollapse: val });
       };
 
+      const ArcoMenu = resolveComponent('a-menu');
+      const ArcoSubMenu = resolveComponent('a-sub-menu');
+      const ArcoMenuItem = resolveComponent('a-menu-item');
+
       const renderSubMenu = () => {
-        function travel(_route: RouteRecordRaw[], nodes = []) {
+        function travel(_route: RouteRecordRaw[], nodes: ReturnType<typeof h>[] = []) {
           if (_route) {
             _route.forEach((element) => {
-              // This is demo, modify nodes as needed
               const icon = element?.meta?.icon
                 ? () => h(compile(`<${element?.meta?.icon}/>`))
                 : null;
               const node =
-                element?.children && element?.children.length !== 0 ? (
-                  <a-sub-menu
-                    key={element?.name}
-                    v-slots={{
-                      icon,
-                      title: () => h(compile(t(element?.meta?.locale || ''))),
-                    }}
-                  >
-                    {travel(element?.children)}
-                  </a-sub-menu>
-                ) : (
-                  <a-menu-item
-                    key={element?.name}
-                    v-slots={{ icon }}
-                    onClick={() => goto(element)}
-                  >
-                    {t(element?.meta?.locale || '')}
-                  </a-menu-item>
-                );
-              nodes.push(node as never);
+                element?.children && element.children.length !== 0
+                  ? h(
+                      ArcoSubMenu,
+                      { key: element.name as string },
+                      {
+                        icon,
+                        title: () => h(compile(t(element?.meta?.locale || ''))),
+                        default: () => travel(element.children || []),
+                      }
+                    )
+                  : h(
+                      ArcoMenuItem,
+                      {
+                        key: element.name as string,
+                        onClick: () => goto(element),
+                      },
+                      {
+                        icon,
+                        default: () => t(element?.meta?.locale || ''),
+                      }
+                    );
+              nodes.push(node);
             });
           }
           return nodes;
@@ -125,22 +130,31 @@
         return travel(menuTree.value);
       };
 
-      return () => (
-        <a-menu
-          mode={topMenu.value ? 'horizontal' : 'vertical'}
-          v-model:collapsed={collapsed.value}
-          v-model:open-keys={openKeys.value}
-          show-collapse-button={appStore.device !== 'mobile'}
-          auto-open={false}
-          selected-keys={selectedKey.value}
-          auto-open-selected={true}
-          level-indent={34}
-          style="height: 100%;width:100%;"
-          onCollapse={setCollapse}
-        >
-          {renderSubMenu()}
-        </a-menu>
-      );
+      return () =>
+        h(
+          ArcoMenu,
+          {
+            mode: topMenu.value ? 'horizontal' : 'vertical',
+            collapsed: collapsed.value,
+            'onUpdate:collapsed': (value: boolean) => {
+              collapsed.value = value;
+            },
+            openKeys: openKeys.value,
+            'onUpdate:openKeys': (value: string[]) => {
+              openKeys.value = value;
+            },
+            showCollapseButton: appStore.device !== 'mobile',
+            autoOpen: false,
+            selectedKeys: selectedKey.value,
+            autoOpenSelected: true,
+            levelIndent: 34,
+            style: 'height: 100%; width: 100%;',
+            onCollapse: setCollapse,
+          },
+          {
+            default: () => renderSubMenu(),
+          }
+        );
     },
   });
 </script>

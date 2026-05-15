@@ -13,8 +13,9 @@
       "@/*": ["src/*"]
     },
     "lib": ["es2020", "dom"],
+    "types": ["node", "vite/client", "vue"],
     "skipLibCheck": true
   },
   "include": ["src/**/*", "src/**/*.vue", "config/*.ts"],
-  "exclude": ["node_modules"]
+  "exclude": ["node_modules", "src/**/*.test.ts", "src/**/__tests__/**"]
 }

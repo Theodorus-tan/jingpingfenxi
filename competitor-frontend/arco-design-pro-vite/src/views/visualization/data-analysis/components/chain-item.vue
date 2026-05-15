@@ -30,6 +30,7 @@
 
 <script lang="ts" setup>
   import { ref, PropType, CSSProperties } from 'vue';
+  import type { EChartsOption } from 'echarts';
   import useLoading from '@/hooks/loading';
   import {
     queryPublicOpinionAnalysis,
@@ -40,7 +41,7 @@
 
   const barChartOptionsFactory = () => {
     const data = ref<any>([]);
-    const { chartOption } = useChartOption(() => {
+    const { chartOption } = useChartOption((): EChartsOption => {
       return {
         grid: {
           left: 0,
@@ -59,15 +60,17 @@
           show: true,
           trigger: 'axis',
         },
-        series: {
-          name: 'total',
-          data,
-          type: 'bar',
-          barWidth: 7,
-          itemStyle: {
-            borderRadius: 2,
+        series: [
+          {
+            name: 'total',
+            data: data.value,
+            type: 'bar',
+            barWidth: 7,
+            itemStyle: {
+              borderRadius: 2,
+            },
           },
-        },
+        ],
       };
     });
     return {
@@ -78,7 +81,7 @@
 
   const lineChartOptionsFactory = () => {
     const data = ref<number[][]>([[], []]);
-    const { chartOption } = useChartOption(() => {
+    const { chartOption } = useChartOption((): EChartsOption => {
       return {
         grid: {
           left: 0,
@@ -163,7 +166,7 @@
             label: {
               show: false,
             },
-            data,
+            data: data.value,
           },
         ],
       };

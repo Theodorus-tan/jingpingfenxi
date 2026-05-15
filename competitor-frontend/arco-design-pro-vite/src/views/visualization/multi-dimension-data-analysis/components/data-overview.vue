@@ -51,7 +51,9 @@
             el.color
           }" class="tooltip-item-icon"></span><span>${el.seriesName}</span>
         </p>
-        <span class="tooltip-value">${el.value.toLocaleString()}</span>
+        <span class="tooltip-value">${Number(
+          el.value ?? 0
+        ).toLocaleString()}</span>
       </div>`
       )
       .reverse()

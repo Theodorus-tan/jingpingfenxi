@@ -24,6 +24,20 @@
     </div>
     <ul class="right-side">
       <li>
+        <a-tooltip content="聊天助手">
+          <a-button
+            class="nav-btn assistant-btn"
+            type="outline"
+            :shape="'circle'"
+            @click="openGlobalAssistant"
+          >
+            <template #icon>
+              <icon-robot />
+            </template>
+          </a-button>
+        </a-tooltip>
+      </li>
+      <li>
         <a-tooltip :content="$t('settings.search')">
           <a-button class="nav-btn" type="outline" :shape="'circle'">
             <template #icon>
@@ -260,6 +274,8 @@
     Message.success(res as string);
   };
   const toggleDrawerMenu = inject('toggleDrawerMenu') as () => void;
+  const openGlobalAssistant =
+    (inject('openGlobalAssistant') as (() => void) | undefined) || (() => {});
 </script>
 
 <style scoped lang="less">

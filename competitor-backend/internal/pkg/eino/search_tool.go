@@ -15,6 +15,13 @@ import (
 )
 
 type searchTool struct{}
+type searchIntent string
+
+const (
+	searchIntentReview  searchIntent = "review"
+	searchIntentMacro   searchIntent = "macro"
+	searchIntentFinance searchIntent = "finance"
+)
 
 func NewSearchTool() tool.BaseTool {
 	return &searchTool{}
@@ -50,7 +57,7 @@ func (s *searchTool) InvokableRun(ctx context.Context, argumentsInJSON string, o
 		args.MaxResults = 5
 	}
 
-	results := bingSearch(args.Query, args.MaxResults)
+	results := bingSearch(rewriteSearchQuery(args.Query, searchIntentReview, time.Now()), args.MaxResults)
 	data, _ := json.Marshal(results)
 	return string(data), nil
 }
@@ -59,6 +66,52 @@ type searchResult struct {
 	Title   string `json:"title"`
 	Snippet string `json:"snippet"`
 	URL     string `json:"url"`
+}
+
+func rewriteSearchQuery(query string, intent searchIntent, now time.Time) string {
+	normalized := strings.TrimSpace(query)
+	if normalized == "" {
+		return normalized
+	}
+
+	tokens := []string{normalized}
+	if !strings.Contains(normalized, fmt.Sprintf("%d", now.Year())) {
+		tokens = append(tokens, fmt.Sprintf("%d", now.Year()))
+	}
+	if !strings.Contains(normalized, fmt.Sprintf("%d", now.Year()-1)) {
+		tokens = append(tokens, fmt.Sprintf("%d", now.Year()-1))
+	}
+	if !strings.Contains(normalized, "最新") {
+		tokens = append(tokens, "最新")
+	}
+
+	switch intent {
+	case searchIntentReview:
+		tokens = append(tokens, "评测", "用户评价", "体验", "测评")
+	case searchIntentMacro:
+		tokens = append(tokens, "官网", "创始人", "融资", "商业模式")
+	case searchIntentFinance:
+		tokens = append(tokens, "财报", "营收", "利润", "融资")
+	}
+
+	return strings.Join(deduplicateTokens(tokens), " ")
+}
+
+func deduplicateTokens(tokens []string) []string {
+	seen := make(map[string]struct{}, len(tokens))
+	result := make([]string, 0, len(tokens))
+	for _, token := range tokens {
+		token = strings.TrimSpace(token)
+		if token == "" {
+			continue
+		}
+		if _, ok := seen[token]; ok {
+			continue
+		}
+		seen[token] = struct{}{}
+		result = append(result, token)
+	}
+	return result
 }
 
 func bingSearch(query string, maxResults int) []searchResult {
@@ -193,6 +246,120 @@ func stripHTMLTags(s string) string {
 
 func fallbackResults(msg string) []searchResult {
 	return []searchResult{
-		{Title: "搜索暂时不可用", Snippet: msg + "，将基于训练数据和行业知识进行分析。", URL: ""},
+		{Title: "搜索暂时不可用", Snippet: msg + "，请在报告中明确标注缺乏公开数据，禁止编造。", URL: ""},
 	}
+}
+
+// -----------------------------------------
+// 2. 战略广谱抓取 Tool (Macro) + 降级
+// -----------------------------------------
+type macroSearchTool struct{}
+
+func NewMacroSearchTool() tool.BaseTool {
+	return &macroSearchTool{}
+}
+
+func (s *macroSearchTool) Info(_ context.Context) (*schema.ToolInfo, error) {
+	return &schema.ToolInfo{
+		Name: "macro_search",
+		Desc: "查询企业百科、官网、创始人背景等宏观战略信息。当需要梳理发展历程、商业模式时使用。",
+		ParamsOneOf: schema.NewParamsOneOfByParams(map[string]*schema.ParameterInfo{
+			"query": {
+				Desc:     "搜索关键词，例如 '特斯拉 商业模式' 或 '大疆 创始人 背景'",
+				Type:     schema.String,
+				Required: true,
+			},
+		}),
+	}, nil
+}
+
+func (s *macroSearchTool) InvokableRun(ctx context.Context, argumentsInJSON string, opts ...tool.Option) (string, error) {
+	var args struct {
+		Query string `json:"query"`
+	}
+	_ = json.Unmarshal([]byte(argumentsInJSON), &args)
+
+	// 模拟尝试抓取百科/企查查（这里仍用 bing 替代，但在真实场景会接特定 API）
+	results := bingSearch(rewriteSearchQuery(args.Query+" 百度百科 企查查", searchIntentMacro, time.Now()), 5)
+
+	// 降级判断：如果结果太少，说明是低调初创企业，退回基础 snippet 并打上标记
+	if len(results) < 2 {
+		results = bingSearch(rewriteSearchQuery(args.Query, searchIntentMacro, time.Now()), 3)
+		for i := range results {
+			results[i].Snippet = "[低置信度-非结构化信息] " + results[i].Snippet
+		}
+	}
+
+	data, _ := json.Marshal(results)
+	return string(data), nil
+}
+
+// -----------------------------------------
+// 3. 财务股市抓取 Tool (Finance) + 熔断
+// -----------------------------------------
+type financeSearchTool struct{}
+
+func NewFinanceSearchTool() tool.BaseTool {
+	return &financeSearchTool{}
+}
+
+func (s *financeSearchTool) Info(_ context.Context) (*schema.ToolInfo, error) {
+	return &schema.ToolInfo{
+		Name: "finance_search",
+		Desc: "查询上市公司的财报、营收、毛利率等财务数据。",
+		ParamsOneOf: schema.NewParamsOneOfByParams(map[string]*schema.ParameterInfo{
+			"company_name": {
+				Desc:     "公司名称或股票代码，例如 'AAPL' 或 '比亚迪'",
+				Type:     schema.String,
+				Required: true,
+			},
+		}),
+	}, nil
+}
+
+func (s *financeSearchTool) InvokableRun(ctx context.Context, argumentsInJSON string, opts ...tool.Option) (string, error) {
+	var args struct {
+		CompanyName string `json:"company_name"`
+	}
+	_ = json.Unmarshal([]byte(argumentsInJSON), &args)
+
+	// 模拟调用股票 API（这里用 bing 搜索代替）
+	results := bingSearch(rewriteSearchQuery(args.CompanyName+" 财报 营收 净利润", searchIntentFinance, time.Now()), 3)
+
+	// 降级与熔断机制 (Circuit Breaker)
+	// 如果没有明显包含财务关键字，判定为非上市公司
+	hasFinanceData := false
+	for _, r := range results {
+		if strings.Contains(r.Snippet, "亿") || strings.Contains(r.Snippet, "营收") || strings.Contains(r.Snippet, "财报") {
+			hasFinanceData = true
+			break
+		}
+	}
+
+	if !hasFinanceData {
+		// 第一步降级：尝试找融资历程
+		fundingResults := bingSearch(rewriteSearchQuery(args.CompanyName+" 天眼查 融资 历程", searchIntentFinance, time.Now()), 2)
+		hasFunding := false
+		for _, r := range fundingResults {
+			if strings.Contains(r.Snippet, "轮") || strings.Contains(r.Snippet, "投资") {
+				hasFunding = true
+				break
+			}
+		}
+
+		if hasFunding {
+			data, _ := json.Marshal(fundingResults)
+			return string(data), nil
+		}
+
+		// 第二步熔断：彻底没数据，防幻觉，直接返回明确的熔断指令给 LLM
+		circuitBreakerMsg := []searchResult{
+			{Title: "熔断触发", Snippet: "【系统指令】该企业为非上市公司，且未查到公开融资数据。请在报告中直接输出：『该竞品为非公开市场企业，无法获取有效资本与财务数据。』绝对禁止编造虚假数据。", URL: ""},
+		}
+		data, _ := json.Marshal(circuitBreakerMsg)
+		return string(data), nil
+	}
+
+	data, _ := json.Marshal(results)
+	return string(data), nil
 }
